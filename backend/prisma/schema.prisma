@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  timezone     String
+  createdAt    DateTime @default(now())
+
+  habits Habit[]
+
+  @@map("users")
+}
+
+model Habit {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkIns CheckIn[]
+
+  @@index([userId])
+  @@map("habits")
+}
+
+// localDate is stored as an ISO "YYYY-MM-DD" string representing the user's
+// LOCAL calendar day (per their IANA timezone) at the moment of check-in.
+// It is deliberately NOT a DateTime/timestamp column: streak logic must
+// operate on calendar days in the user's timezone, not on UTC instants or
+// elapsed hours. Keeping it as a plain date string means the database never
+// has to do timezone math, and lexicographic string comparison/sorting is
+// equivalent to chronological order for ISO dates.
+model CheckIn {
+  id        String   @id @default(uuid())
+  habitId   String
+  localDate String
+  createdAt DateTime @default(now())
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  // Enforces "no duplicate local day" at the database level, not just in
+  // application code.
+  @@unique([habitId, localDate])
+  @@index([habitId, localDate])
+  @@map("check_ins")
+}
